@@ -1,0 +1,39 @@
+# Virtual environment
+venv/
+.env
+*.env
+
+# Python cache & compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Logs
+*.log
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# IDE settings
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.bak
+
+# Byte-compiled / optimized / DLL files
+*.pyo
+*.pyd
+*.so
+
+# Local database / media
+db.sqlite3
+media/
+uploads/
+
+# Node stuff (if you ever mix frontend)
+node_modules/
+dist/
+build/
