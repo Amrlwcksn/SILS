@@ -23,6 +23,8 @@ Sistem ini dirancang agar dapat terhubung dengan **perangkat identifikasi (misal
 - pip install -r requirements.txt
 - python app.py
 
+---
+
 ## Lisensi
 **Project ini dibuat untuk keperluan pembelajaran dan pengembangan sistem IoT.
 Bebas digunakan, dimodifikasi, dan dikembangkan ulang untuk tujuan edukasi.
