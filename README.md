@@ -14,7 +14,7 @@ Sistem ini dirancang agar dapat terhubung dengan **perangkat identifikasi (misal
 
 ---
 
-##Run Project##
+## Run Project
 - python -m venv venv
 - source venv/Scripts/activate   # Windows (Git Bash)
   atau
@@ -23,7 +23,7 @@ Sistem ini dirancang agar dapat terhubung dengan **perangkat identifikasi (misal
 - pip install -r requirements.txt
 - python app.py
 
-##Lisensi##
+## Lisensi
 **Project ini dibuat untuk keperluan pembelajaran dan pengembangan sistem IoT.
 Bebas digunakan, dimodifikasi, dan dikembangkan ulang untuk tujuan edukasi.
 © 2025 Wicaksono**
