@@ -17,9 +17,9 @@ Sistem ini dirancang agar dapat terhubung dengan **perangkat identifikasi (misal
 **Run Project**
 ## Aktifkan virtual environment
 - python -m venv venv
-  source venv/Scripts/activate   # Windows (Git Bash)
-  # atau
-  source venv/bin/activate       # macOS / Linux
+- source venv/Scripts/activate   # Windows (Git Bash)
+  atau
+- source venv/bin/activate       # macOS / Linux
 
 - pip install -r requirements.txt
 - python app.py
