@@ -14,7 +14,7 @@ db_config = {
     'host': 'localhost',
     'user': 'root',
     'password': '',
-    'database': ''
+    'database': 'sils_db'
 }
 
 # === KONFIG TELEGRAM ===
@@ -51,7 +51,7 @@ def rfid_data():
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor(dictionary=True)
 
-        # 1️⃣ CARI SISWA BERDASARKAN UID
+        # CARI SISWA BERDASARKAN UID
         cursor.execute("SELECT * FROM tabel_siswa WHERE uid_tag = %s", (uid,))
         siswa = cursor.fetchone()
         print("DEBUG SISWA:", siswa)
@@ -61,7 +61,7 @@ def rfid_data():
             nama_siswa = siswa['nama_siswa']
             id_ortu = siswa['id_ortu']
 
-            # 2️⃣ CATAT PRESENSI DI tabel_absensi
+            # CATAT PRESENSI DI tabel_absensi
             waktu_sekarang = datetime.now()
             waktu_tap = waktu_sekarang.strftime("%Y-%m-%d %H:%M:%S")
 
@@ -80,7 +80,7 @@ def rfid_data():
 
             print(f"Presensi tercatat: {nama_siswa}({status})")
 
-            # 3️⃣ AMBIL DATA ORANG TUA UNTUK KIRIM NOTIFIKASI
+            # AMBIL DATA ORANG TUA UNTUK KIRIM NOTIFIKASI
             cursor.execute("SELECT nama_ortu, telegram_id FROM tabel_ortu WHERE id_ortu = %s", (id_ortu,))
             ortu = cursor.fetchone()
 
@@ -110,7 +110,7 @@ def rfid_data():
             cursor.close()
             conn.close()
 
-
+# Mengambil data dari database
 @app.route('/api/presensi', methods=['GET'])
 def get_presensi():
     try:
