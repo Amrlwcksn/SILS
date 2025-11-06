@@ -5,6 +5,7 @@ import requests
 import os
 from dotenv import load_dotenv
 
+# === LOAD ENVIRONMENT ===
 load_dotenv()
 
 app = Flask(__name__)
@@ -14,7 +15,7 @@ db_config = {
     'host': 'localhost',
     'user': 'root',
     'password': '',
-    'database': 'sils_db'
+    'database': ''
 }
 
 # === KONFIG TELEGRAM ===
@@ -23,7 +24,7 @@ TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessag
 
 
 def kirim_pesan_telegram(chat_id, pesan):
-    """Fungsi kirim pesan ke Telegram"""
+    """Kirim pesan ke Telegram"""
     try:
         payload = {
             'chat_id': chat_id,
@@ -32,15 +33,16 @@ def kirim_pesan_telegram(chat_id, pesan):
         }
         response = requests.post(TELEGRAM_API_URL, data=payload)
         if response.status_code == 200:
-            print(f"📩 Pesan terkirim!")
+            print("📩 Telegram terkirim")
         else:
-            print(f"⚠️ Gagal kirim pesan: {response.text}")
+            print(f"⚠️ Gagal kirim Telegram: {response.text}")
     except Exception as e:
-        print("❌ Error kirim telegram:", e)
+        print("❌ Error kirim Telegram:", e)
 
 
 @app.route('/api/rfid', methods=['POST'])
 def rfid_data():
+    """Menerima UID RFID dari ESP32 dan catat presensi"""
     data = request.get_json()
     uid = data.get('uid', '').strip()
 
@@ -51,118 +53,58 @@ def rfid_data():
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor(dictionary=True)
 
-        # CARI SISWA BERDASARKAN UID
-        cursor.execute("SELECT * FROM tabel_siswa WHERE uid_tag = %s", (uid,))
+        # === Cari siswa berdasarkan UID ===
+        cursor.execute("SELECT * FROM tabel_siswa WHERE UID = %s", (uid,))
         siswa = cursor.fetchone()
-        print("DEBUG SISWA:", siswa)
-        
-        if siswa:
-            id_siswa = siswa['id_siswa']
-            nama_siswa = siswa['nama_siswa']
-            id_ortu = siswa['id_ortu']
 
-            # CATAT PRESENSI DI tabel_absensi
-            waktu_sekarang = datetime.now()
-            waktu_tap = waktu_sekarang.strftime("%Y-%m-%d %H:%M:%S")
+        if not siswa:
+            print(f"⚠️ UID tidak terdaftar: {uid}")
+            return jsonify({"status": "unknown", "message": "UID tidak ditemukan"}), 404
 
-            batas_waktu = time(7,15)
+        nis = siswa['NIS']
+        nama_siswa = siswa['nama_siswa']
+        id_ortu = siswa['id_ortu']
 
-            if waktu_sekarang.time()<= batas_waktu:
-                status = "✅Tepat Waktu"
-            else:
-                status = "⚠️Terlambat"
+        # === Hitung status presensi ===
+        waktu_sekarang = datetime.now()
+        waktu_tap = waktu_sekarang.strftime("%Y-%m-%d %H:%M:%S")
+        batas_waktu = time(7, 15)  # jam 07:15
 
-            cursor.execute("""
-                INSERT INTO tabel_presensi (id_siswa, waktu, status)
-                VALUES (%s, %s, %s)
-            """, (id_siswa, waktu_tap, status))
-            conn.commit()
-
-            print(f"Presensi tercatat: {nama_siswa}({status})")
-
-            # AMBIL DATA ORANG TUA UNTUK KIRIM NOTIFIKASI
-            cursor.execute("SELECT nama_ortu, telegram_id FROM tabel_ortu WHERE id_ortu = %s", (id_ortu,))
-            ortu = cursor.fetchone()
-
-            if ortu and ortu['telegram_id']:
-                pesan = (
-                    f"👋 Halo {ortu['nama_ortu']}!\n\n"
-                    f"Ananda *{nama_siswa}* baru saja melakukan presensi pada:\n"
-                    f"🕓 {waktu_tap}\n\n"
-                    f"Status: Hadir di sekolah. {status}"
-                )
-                kirim_pesan_telegram(ortu['telegram_id'], pesan)
-            else:
-                print("⚠️ Orang tua tidak memiliki Telegram ID atau tidak ditemukan.")
-
-            return jsonify({"status": "ok", "message": f"Presensi tercatat untuk {nama_siswa}"})
-
+        if waktu_sekarang.time() <= batas_waktu:
+            status_db = "Tepat Waktu"
+            status_emoji = "✅ Tepat Waktu"
         else:
-            print(f"⚠️ UID tidak dikenali: {uid}")
-            return jsonify({"status": "unknown", "message": "UID tidak terdaftar"})
+            status_db = "Terlambat"
+            status_emoji = "⚠️ Terlambat"
+
+        # === Simpan ke database ===
+        cursor.execute("""
+            INSERT INTO tabel_presensi (NIS, waktu, status)
+            VALUES (%s, %s, %s)
+        """, (nis, waktu_tap, status_db))
+        conn.commit()
+
+        print(f"✅ Presensi tercatat: {nama_siswa} ({status_db})")
+
+        # === Kirim notifikasi ke orang tua ===
+        cursor.execute("SELECT nama_ortu, telegram_id FROM tabel_ortu WHERE id_ortu = %s", (id_ortu,))
+        ortu = cursor.fetchone()
+
+        if ortu and ortu['telegram_id']:
+            pesan = (
+                f"👋 Halo {ortu['nama_ortu']}!\n\n"
+                f"Ananda *{nama_siswa}* baru saja melakukan presensi.\n"
+                f"🕒 Waktu: {waktu_tap}\n"
+                f"Status: {status_emoji}"
+            )
+            kirim_pesan_telegram(ortu['telegram_id'], pesan)
+        else:
+            print("⚠️ Orang tua tidak memiliki Telegram ID atau tidak ditemukan")
+
+        return jsonify({"status": "ok", "message": f"Presensi tercatat untuk {nama_siswa}"})
 
     except Exception as e:
         print("❌ Error:", e)
-        return jsonify({"status": "error", "message": str(e)})
-
-    finally:
-        if conn.is_connected():
-            cursor.close()
-            conn.close()
-
-# Mengambil data dari database
-@app.route('/api/presensi', methods=['GET'])
-def get_presensi():
-    try:
-        conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor(dictionary=True)
-
-        # Ambil parameter dari query string (kalau ada)
-        nama = request.args.get('nama', '').strip()
-        tanggal = request.args.get('tanggal', '').strip()
-
-        # Base query
-        query = """
-            SELECT 
-                p.id_presensi,
-                s.nama_siswa,
-                s.uid_tag,
-                p.waktu,
-                p.status
-            FROM tabel_presensi p
-            JOIN tabel_siswa s ON p.id_siswa = s.id_siswa
-        """
-        params = []
-
-        # Tambahkan filter sesuai parameter
-        conditions = []
-        if nama:
-            conditions.append("s.nama_siswa LIKE %s")
-            params.append(f"%{nama}%")
-        if tanggal:
-            conditions.append("DATE(p.waktu) = %s")
-            params.append(tanggal)
-
-        if conditions:
-            query += " WHERE " + " AND ".join(conditions)
-
-        query += " ORDER BY p.waktu DESC"
-
-        cursor.execute(query, params)
-        data = cursor.fetchall()
-
-        return jsonify({
-            "status": "success",
-            "total": len(data),
-            "filters": {
-                "nama": nama or None,
-                "tanggal": tanggal or None
-            },
-            "data": data
-        }), 200
-
-    except Exception as e:
-        print("❌ Error ambil presensi:", e)
         return jsonify({"status": "error", "message": str(e)}), 500
 
     finally:
@@ -171,6 +113,32 @@ def get_presensi():
             conn.close()
 
 
+# === API GET PRESENSI ===
+@app.route('/api/presensi', methods=['GET'])
+def get_presensi():
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+
+        # Ambil semua data presensi
+        query = """
+            SELECT p.id_presensi, s.NIS, s.nama_siswa, s.kelas, p.waktu, p.status
+            FROM tabel_presensi p
+            JOIN tabel_siswa s USING(NIS)
+            ORDER BY p.waktu DESC
+        """
+        cursor.execute(query)
+        data = cursor.fetchall()
+
+        return jsonify({"status": "success", "total": len(data), "data": data})
+
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+    finally:
+        if conn.is_connected():
+            cursor.close()
+            conn.close()
 
 
 if __name__ == '__main__':
