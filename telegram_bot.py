@@ -10,10 +10,10 @@ BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
 # === KONFIG DATABASE ===
 db_config = {
-    "host": "localhost",
-    "user": "root",
-    "password": "",
-    "database": ""
+    'host': 'localhost',
+    'user': 'root',
+    'password': 'root123',
+    'database': 'silslaravel'
 }
 
 # === COMMAND /start ===
@@ -33,31 +33,39 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
     chat_id = update.effective_chat.id
 
-    # NIS biasanya angka → cek dulu
+    # Harus angka → validasi input
     if not text.isdigit():
         await update.message.reply_text("⚠️ Kirim hanya NIS (angka) ya!")
         return
 
-    nis = text  # NIS bertipe string varchar
+    nis = text
 
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor(dictionary=True)
 
-        # === CEK CHAT ID SUDAH TERPAKAI ===
-        cursor.execute("SELECT nama_ortu FROM tabel_ortu WHERE telegram_id = %s", (chat_id,))
-        sudah_terhubung = cursor.fetchone()
+        # === CEK CHAT ID SUDAH DIPAKAI ===
+        cursor.execute("""
+            SELECT nama_ortu FROM tabel_ortu WHERE telegram_id = %s
+        """, (chat_id,))
+        existing_chat = cursor.fetchone()
 
-        if sudah_terhubung:
+        if existing_chat:
             await update.message.reply_text(
-                f"🔒 Akun Telegram ini sudah terhubung dengan orang tua siswa *{sudah_terhubung['nama_ortu']}*.\n"
-                f"Jika ingin pindah akun, silakan hubungi administrasi sekolah."
+                f"🔒 Akun Telegram ini sudah terhubung dengan orang tua *{existing_chat['nama_ortu']}*.\n"
+                f"Jika ingin mengganti akun, hubungi admin sekolah."
             )
             return
 
-        # === CARI SISWA BERDASARKAN NIS ===
+        # === CARI DATA SISWA BERDASARKAN NIS ===
         cursor.execute("""
-            SELECT s.NIS, s.nama_siswa, o.id_ortu, o.nama_ortu, o.telegram_id
+            SELECT 
+                s.id AS siswa_id,
+                s.NIS,
+                s.nama AS nama_siswa,
+                s.id_ortu,
+                o.nama_ortu,
+                o.telegram_id
             FROM tabel_siswa s
             JOIN tabel_ortu o ON s.id_ortu = o.id_ortu
             WHERE s.NIS = %s
@@ -65,25 +73,27 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         siswa = cursor.fetchone()
 
         if not siswa:
-            await update.message.reply_text("❌ NIS tidak ditemukan di sistem.")
+            await update.message.reply_text("❌ NIS tidak ditemukan di database.")
             return
 
-        # === CEK APAKAH ORTU SUDAH TERDAFTAR TELEGRAM SEBELUMNYA ===
+        # === ORANG TUA SUDAH TERHUBUNG DENGAN TELEGRAM LAIN? ===
         if siswa["telegram_id"] is not None:
             await update.message.reply_text(
                 f"🔐 Orang tua *{siswa['nama_ortu']}* sudah terhubung dengan Telegram lain.\n"
-                f"Untuk mengganti nomor, silakan hubungi administrasi sekolah."
+                f"Untuk mengganti nomor, silakan hubungi admin."
             )
             return
 
-        # === SIMPAN CHAT_ID KE DATA ORTU ===
-        cursor.execute("UPDATE tabel_ortu SET telegram_id = %s WHERE id_ortu = %s",
-                       (chat_id, siswa["id_ortu"]))
+        # === SIMPAN CHAT ID ===
+        cursor.execute("""
+            UPDATE tabel_ortu SET telegram_id = %s WHERE id_ortu = %s
+        """, (chat_id, siswa["id_ortu"]))
         conn.commit()
 
         await update.message.reply_text(
-            f"✅ Berhasil! Akun Telegram ini sekarang terhubung dengan orang tua dari *{siswa['nama_siswa']}*.\n"
-            f"Mulai sekarang Anda akan menerima notifikasi presensi.",
+            f"✅ Pendaftaran berhasil!\n"
+            f"Akun ini kini terhubung dengan orang tua dari *{siswa['nama_siswa']}*.\n"
+            f"Anda akan menerima notifikasi presensi otomatis.",
             parse_mode="Markdown"
         )
 
@@ -102,7 +112,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    print("🤖 Bot Telegram SILS (v22.x) siap menerima pesan…")
+    print("🤖 Bot Telegram SILS siap menerima pesan…")
     app.run_polling()
 
 if __name__ == "__main__":
